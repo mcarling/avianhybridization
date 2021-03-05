@@ -6,13 +6,6 @@
 ## based on the 19 bioclimatic variables. Much of this code was inspired 
 ## by this guide put together by Jeff Oliver: https://jcoliver.github.io/learn-r/011-species-distribution-models.html.
 
-
-# set up ------------------------------------------------------------------
-
-# organizing workspace
-dir.create(path = "data")
-dir.create(path = "output")
-
 library(sp)
 library(raster)
 library(maptools)
@@ -22,22 +15,31 @@ library(tidyverse)
 library(lubridate)
 library(sf)
 
+setwd("/Volumes/commons/CarlingLab/eBird Data/Data for looking at relative abundance")
+
+
+#=============================================================================================
+#     preparing bioclim data
+#=============================================================================================
+
+# organizing workspace
+dir.create(path = "data")
+dir.create(path = "output")
+
 # accessing worldclim data
 bioclim.data <- getData(name = "worldclim",
                         var = "bio",
                         res = 2.5,
                         path = "data/")
 
-## filtering down bioclim dataset to only the variables we're interested in
+## can run models with only bioclim variables we're interested in. Otherwise, models will run based on all 19 variables.
 relevant_vars <- c(10,12,18)
-
 bioclim.relevant <- bioclim.data[[relevant_vars]]
 
-!!!!!!! also in the modeling script, look at covariance between predictor variables
 
-
-
-# laoding and preparing data --------------------------------------------
+#=============================================================================================
+#     loading and preparing records of hybrids
+#=============================================================================================
 
 #### reading in and preparing museum data
 museum.data <- read.csv("Passerina_VertNet_hybrids.csv")
@@ -67,39 +69,9 @@ ebird.data <- hybrid_present_ebird[, c("decimallongitude", "decimallatitude")]
 museum.ebird.data <- rbind(museum.data, ebird.data)
 
 
-
-
-# # Load the data to use for our base map
-# data(wrld_simpl)
-# data(state)
-# #plot(state)
-# 
-# # Plot the base map
-# plot(wrld_simpl, 
-#      xlim = c(min.lon - 5, max.lon + 5),
-#      ylim = c(min.lat - 5, max.lat + 5),
-#      axes = TRUE, 
-#      col = "grey95")
-
-
-#plot(wrld_simpl, add = TRUE)
-
-# Add the points for individual observation
-# points(x = museum.ebird.data$decimallongitude, 
-#        y = museum.ebird.data$decimallatitude, 
-#        col = "green", 
-#        pch = 20, 
-#        cex = 0.75)
-# points(x = museum.data$decimallongitude, 
-#        y = museum.data$decimallatitude, 
-#        col = "red", 
-#        pch = 20, 
-#        cex = 0.75)
-# # And draw a little box around the graph
-# box()
-
-
-# modeling bioclimatic distribution based on museum records ---------------
+#=============================================================================================
+#     modeling hybrid bioclimatic distribution based on museum records
+#=============================================================================================
 
 # Determine geographic extent of our data
 max.lat <- ceiling(max(museum.data$decimallatitude))
@@ -110,12 +82,12 @@ geographic.extent <- extent(x = c(min.lon - 5, max.lon + 5, min.lat - 5, max.lat
 
 # Crop bioclim data to geographic extent of museum records for hybrids
 bioclim.data2 <- crop(x = bioclim.data, y = geographic.extent)
-bioclim.relevant2 <- crop(x = bioclim.relevant, y = geographic.extent)
+# bioclim.relevant2 <- crop(x = bioclim.relevant, y = geographic.extent)
 
 
 # Build species distribution model
 bc.model <- bioclim(x = bioclim.data2, p = museum.data)
-bc.model <- bioclim(x = bioclim.relevant2, p = museum.data)
+# bc.model <- bioclim(x = bioclim.relevant2, p = museum.data)
 
 
 # Predict presence from model
@@ -197,8 +169,9 @@ image.plot(zlim = range(brks), legend.only = TRUE, col = pal,
                               cex = 1, line = 0))
 
 
-
-# modeling bioclimatic distribution based on museum records and eBird data ---------------
+#=============================================================================================
+#     modeling hybrid bioclimatic distribution based on museum records and eBird data
+#=============================================================================================
 
 # Determine geographic extent of our data
 max.lat <- ceiling(max(museum.ebird.data$decimallatitude))
@@ -209,7 +182,7 @@ geographic.extent <- extent(x = c(min.lon - 5, max.lon + 5, min.lat - 5, max.lat
 
 # Crop bioclim data to geographic extent of museum records for hybrids
 bioclim.data2 <- crop(x = bioclim.data, y = geographic.extent)
-bioclim.relevant2 <- crop(x = bioclim.relevant, y = geographic.extent)
+# bioclim.relevant2 <- crop(x = bioclim.relevant, y = geographic.extent)
 
 
 # Build species distribution model
@@ -286,293 +259,3 @@ image.plot(zlim = range(brks), legend.only = TRUE, col = pal,
            legend.args = list(text = title,
                               side = 3, col = "black",
                               cex = 1, line = 0))
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# Use the bioclim data files for sampling resolution
-bil.files <- list.files(path = "data/wc2-5", 
-                        pattern = "*.bil$", 
-                        full.names = TRUE)
-
-# We only need one file, so use the first one in the list of .bil files
-mask <- raster(bil.files[1])
-
-#Randomly sample points (same number as our observed points)
-background <- randomPoints(mask = mask,     # Provides resolution of sampling points
-                           n = nrow(museum.data),      # Number of random points
-                           ext = geographic.extent, # Spatially restricts sampling
-                           extf = 1.25)             # Expands sampling a little bit
-
-head(background)
-
-
-# Plot the base map
-plot(wrld_simpl, 
-     xlim = c(min.lon, max.lon),
-     ylim = c(min.lat, max.lat),
-     axes = TRUE, 
-     col = "grey95",
-     main = "Presence and pseudo-absence points")
-
-# Add the background points
-points(background, col = "grey30", pch = 1, cex = 0.75)
-
-# Add the observations
-points(x = museum.data$decimallongitude, 
-       y = museum.data$decimallatitude, 
-       col = "olivedrab", 
-       pch = 20, 
-       cex = 0.75)
-
-box()
-
-
-# Arbitrarily assign group 1 as the testing data group
-testing.group <- 1
-
-# Create vector of group memberships
-group.presence <- kfold(x = museum.data, k = 5) # kfold is in dismo package
-
-
-head(group.presence)
-
-# Should see even representation in each group
-table(group.presence)
-
-
-# Separate observations into training and testing groups
-presence.train <- museum.data[group.presence != testing.group, ]
-presence.test <- museum.data[group.presence == testing.group, ]
-
-# Repeat the process for pseudo-absence points
-group.background <- kfold(x = background, k = 5)
-background.train <- background[group.background != testing.group, ]
-background.test <- background[group.background == testing.group, ]
-
-
-# Build a model using training data
-bc.model <- bioclim(x = bioclim.data, p = presence.train)
-
-# Predict presence from model (same as previously, but with the update model)
-predict.presence <- dismo::predict(object = bc.model, 
-                                   x = bioclim.data, 
-                                   ext = geographic.extent)
-
-
-# Use testing data for model evaluation
-bc.eval <- evaluate(p = presence.test,   # The presence testing data
-                    a = background.test, # The absence testing data
-                    model = bc.model,    # The model we are evaluating
-                    x = bioclim.data)    # Climatic variables for use by model
-
-# Determine minimum threshold for "presence"
-bc.threshold <- threshold(x = bc.eval, stat = "spec_sens")
-
-
-# Plot base map
-plot(wrld_simpl, 
-     xlim = c(min.lon, max.lon),
-     ylim = c(min.lat, max.lat),
-     axes = TRUE, 
-     col = "grey95")
-
-# Only plot areas where probability of occurrence is greater than the threshold
-plot(predict.presence > bc.threshold, 
-     add = TRUE, 
-     legend = FALSE, 
-     col = c(NA, "olivedrab"))
-
-# And add those observations
-points(x = museum.data$decimallongitude, 
-       y = museum.data$decimallatitude, 
-       col = "black",
-       pch = "+", 
-       cex = 0.75)
-
-# Redraw those country borders
-plot(wrld_simpl, add = TRUE, border = "grey5")
-box()
-
-
-
-
-
-
-
-
-
-
-
-##### combining Bioclim with MODIS and eBird data ------------------------------------------
-# extracting bioclim values for eBird checklists --------------------------
-#converting observation date to date, not a factor
-lazuli_bunting_pred <- read.csv("lazuli_bunting_pred_mx_half_july.csv", header = TRUE) # for Lazuli
-lazuli_bunting_pred$observation_date <- as_date(lazuli_bunting_pred$observation_date)
-
-indigo_bunting_pred <- read.csv("indigo_bunting_pred_mx_half_july.csv", header = TRUE) # for Indigo
-indigo_bunting_pred$observation_date <- as_date(indigo_bunting_pred$observation_date)
-
-hybrid_bunting_pred <- read.csv("hybrid_bunting_pred_mx_half_july.csv", header = TRUE) # for hybrid
-hybrid_bunting_pred$observation_date <- as_date(hybrid_bunting_pred$observation_date)
-
-
-#lazuli_sf <- lazuli_bunting_pred %>% # for Lazuli
-#indigo_sf <- indigo_bunting_pred %>% # for Indigo
-hybrid_sf <- hybrid_bunting_pred %>% # for hybrids
-  # filtering down to unique localities, don't care about year for this, I don't think
-  # we also don't need to create a buffer around each point, all we need is the value for each point
-  distinct(locality_id, latitude, longitude) %>% 
-  # convert to spatial features
-  st_as_sf(coords = c("longitude", "latitude"), crs = 4326) %>% # have to change crs? no, you shouldn't need to
-  # transform to bioclim projection
-  st_transform(crs = projection(bioclim.data))
-
-# need to pull out each variable from the bioclim dataset to add to lazuli sf dataset!!!!!!!
-#lazuli_locs <- st_set_geometry(lazuli_sf, NULL) %>% # for Lazulis
-#indigo_locs <- st_set_geometry(indigo_sf, NULL) %>% # for Lazulis
-hybrid_locs <- st_set_geometry(hybrid_sf, NULL) %>% # for Lazulis
-  mutate(id = row_number())
-
-relevant_vars <- c(10,12,18)
-
-#bioclim_values = vector('list', nlayers(bioclim.data))
-bioclim_values = vector('list', length(relevant_vars))
-
-for (i in relevant_vars){
-  # for Lazuli
-  #bioclim_checklists <- raster::extract(bioclim.data[[i]], lazuli_sf)
-  #bioclim_values[[i]] <- tibble(locality_id = lazuli_locs$locality_id, bioclim_var = names(bioclim.data[[i]]), bioclim_value = bioclim_checklists)
-
-  # for Indigo
-  #bioclim_checklists <- raster::extract(bioclim.data[[i]], indigo_sf)
-  #bioclim_values[[i]] <- tibble(locality_id = indigo_locs$locality_id, bioclim_var = names(bioclim.data[[i]]), bioclim_value = bioclim_checklists)
-  
-  # for hybrid
-  bioclim_checklists <- raster::extract(bioclim.data[[i]], hybrid_sf)
-  bioclim_values[[i]] <- tibble(locality_id = hybrid_locs$locality_id, bioclim_var = names(bioclim.data[[i]]), bioclim_value = bioclim_checklists)
-  
-}
-
-bioclim_values_all <- do.call(rbind, bioclim_values)
-
-# renaming bioclim variable names
-
-# creating a dataframe of bioclim variable names
-bioclim_names <- tibble(bioclim_var = paste("bio", 1:19, sep = ""),
-                        bioclim_name = c("bio1_annual_mean_temp",
-                                         "bio2_mean_diurnal_range",
-                                         "bio3_isothermality",
-                                         "bio4_temperature_seasonality",
-                                         "bio5_max_temp_warmest_period",
-                                         "bio6_min_temp_coldest_period",
-                                         "bio7_temp_annual_range",
-                                         "bio8_mean_temp_wettest_quarter",
-                                         "bio9_mean_temp_driest_quarter",
-                                         "bio10_mean_temp_warmest_quarter",
-                                         "bio11_mean_temp_coldest_quarter",
-                                         "bio12_annual_precip",
-                                         "bio13_precip_wettest_period",
-                                         "bio14_precip_driest_period",
-                                         "bio15_precip_seasonality",
-                                         "bio16_precip_wettest_quarter",
-                                         "bio17_precip_driest_quarter",
-                                         "bio18_precip_warmest_quarter",
-                                         "bio19_precip_coldest_quarter"))
-
-
-# combining with new names
-#lazuli_bioclim <- bioclim_values_all %>% # for Lazuli
-#indigo_bioclim <- bioclim_values_all %>% # for indigo
-hybrid_bioclim <- bioclim_values_all %>% # for hybrid
-  inner_join(bioclim_names, by = "bioclim_var") %>% 
-  arrange(bioclim_var) %>% 
-  select(-bioclim_var)
-
-#lazuli_bioclim <- lazuli_bioclim %>% # for Lazuli
-#indigo_bioclim <- indigo_bioclim %>% # for Indigo
-hybrid_bioclim <- hybrid_bioclim %>% # for hybrid
-  pivot_wider(names_from = bioclim_name, 
-              values_from = bioclim_value, 
-              values_fill = list(bioclim_value = NA))
-
-# saving dataframes, but probably don't even need to save different 
-# dataframes for different species, because they should be the same, right?
-# for Lazuli
-write_csv(lazuli_bioclim, "lazuli_bioclim_final.csv", na = "")
-lazuli_bioclim <- read.csv("lazuli_bioclim_final.csv")
-
-# for Indigo
-write_csv(indigo_bioclim, "indigo_bioclim_final.csv", na = "")
-indigo_bioclim <- read.csv("indigo_bioclim_final.csv")
-
-# for hybrid
-write_csv(hybrid_bioclim, "hybrid_bioclim_final.csv", na = "")
-hybrid_bioclim <- read.csv("hybrid_bioclim_final.csv")
-
-
-# extracting bioclim values for prediction surface ------------------------
-
-# adding bioclim values to prediction surface
-
-# including progress bar
-library(progress)
-pb <- progress_bar$new(
-  format = "  downloading [:bar] :percent eta: :eta",
-  total = 100, clear = FALSE, width= 60)
-
-
-relevant_vars <- c(10,12,18) # only looking at relevant bioclim variables
-# bioclim_values_pred = vector('list', nlayers(bioclim.data))
-bioclim_values_pred = vector('list', length(relevant_vars))
-
-for (i in relevant_vars){ # maybe should try rcells instead just to be consistent?
-  bioclim_centers <- raster::extract(bioclim.data[[i]], r_centers)  # check to make sure projections are the same!!!
-  bioclim_values_pred[[i]] <- tibble(id = r_centers$id, bioclim_var = names(bioclim.data[[i]]), bioclim_value = bioclim_centers)
-  #bioclim_values[[i]] <- tibble(locs$locality_id, names(bioclim.data[[i]]), bioclim_checklists)
-  # r_centers2 <- r_centers
-  # r_centers2$bioclim <- bioclim_values
-  # bioclim_values_pred[[i]] <- r_centers2
-  # bioclim_values_pred[[i]]$bioclim_var <- names(bioclim.data[[i]])
-  pb$tick(100/3) # keeping track of progress
-}
-
-bioclim_values_pred_all <- do.call(rbind, bioclim_values_pred)
-
-unique(bioclim_values_pred_all$bioclim_var) # making sure it worked
-
-# combining with new names and spreading
-bioclim_values_pred_all <- bioclim_values_pred_all %>%
-  inner_join(bioclim_names, by = "bioclim_var") %>% 
-  arrange(bioclim_var) %>% 
-  select(-bioclim_var)
-
-head(bioclim_values_pred_all)
-
-#bioclim_values_pred_all_test <- spread(bioclim_values_pred_all, bioclim_name, bioclim)
-
-bioclim_values_pred_all <- bioclim_values_pred_all %>%
-  pivot_wider(names_from = bioclim_name, 
-              values_from = bioclim_value, 
-              values_fill = list(bioclim_value = NA))
-
-
-# join in coordinates
-bioclim_pred <- st_transform(r_centers, crs = 4326) %>% 
-  st_coordinates() %>% 
-  as.data.frame() %>% 
-  cbind(id = r_centers$id, .) %>% 
-  rename(longitude = X, latitude = Y) %>% 
-  inner_join(bioclim_values_pred_all, by = "id")
-
-write_csv(bioclim_pred, "pred_bioclim_r_centers.csv", na = "")
