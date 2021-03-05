@@ -1,10 +1,13 @@
-## In this script, we use the auk package to filter eBird checklists 
-## down to only those that we can use to predict the distributions/
-## relative abundances of focal taxa during the breeding season. Our 
-## filtering decisions were largely inspired by Strimas-Mackey et al.
-## (2020), although we also considered the life history of focal taxa
-## (see below). For the sake of clarity, I filtered checklists for each
-## taxon separately (as opposed to using a for loop or something similar).
+### In this script, we use the auk package to filter eBird checklists 
+### down to only those that we can use to predict the distributions/
+### relative abundances of focal taxa during the breeding season. Our 
+### filtering decisions were largely inspired by Strimas-Mackey et al.
+### (2020), although we also considered the life history of focal taxa
+### (see below). For the sake of clarity, I filtered checklists for each
+### taxon separately (as opposed to using a for loop or something similar).
+
+### At the end of the script, we also download shapefiles for North America 
+### and for bodies of water, which we'll later use for plotting.
 
 #packages for preparing eBird data
 library(tidyverse)
@@ -20,14 +23,15 @@ ebd_dir <-"/Volumes/commons/CarlingLab/eBird Data/Data for looking at relative a
 #ebd_dir <- "/pfs/tsfs1/gscratch/pdoughe1" # if doing on Teton
 
 
-##### preparing eBird data ----------------------------------------------------
+#=============================================================================================
+#     preparing eBird data
+#=============================================================================================
 ## Download eBird data for focal taxa from https://ebird.org/science/use-ebird-data 
 ## (after obtaining permission, of course). While you can start with the entire
-## eBird database, as we did when estimating overall hybridizing rates
-## in the previous script, as we are now interested in hybridization between 
-## it's much easier/faster to download only records for these species.
-## In this script, I downloaded eBird records for Indigo Bunting, 
-## Lazuli Bunting, and Indigo x Lazuli buntings
+## eBird database and then filter down to taxa of interest, as we did when 
+## estiamting overall hybridization rates, it's much easier/faster to download 
+## only records for these taxa. In this script, I downloaded eBird records for 
+## Indigo Bunting, Lazuli Bunting, and Indigo x Lazuli buntings.
 
 # filtering checklists for first parental species -------------------------
 # filtering checklists for Indigo Bunting
@@ -255,8 +259,9 @@ hybrid_bunting_pred <- hybrid_zf_filtered %>%
 write.csv(hybrid_bunting_pred, "hybrid_bunting_pred_mx_half_july.csv", na = "", row.names=FALSE)
 
 
-
-# downloading shapefiles --------------------------------------------------
+#=============================================================================================
+#     downloading shapefiles
+#=============================================================================================
 ## in addition to preparing the eBird data, we also need to download 
 ## shapefiles necessary for making maps
 
