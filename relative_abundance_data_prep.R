@@ -1,7 +1,9 @@
 ### In this script, we prepare datasets for modeling the relative abundances of 
 ### two parental species and hybrids. First, we calculate habitat, elevation,
 ### and bioclim variables for all checklists in the eBird dataset. We then 
-### generate a prediction surface of these variables for North America.
+### generate a prediction surface of these variables for North America. Before 
+### running this script, you need to filter the prepare the eBird data with the 
+### "eBird_loading_rel_abun.R" script.
 
 # loading required packages
 library(sf)
@@ -22,7 +24,10 @@ select <- dplyr::select
 map <- purrr::map
 projection <- raster::projection
 
-##### loading filtered and zero-filled eBird data -----------------------------
+
+#=============================================================================================
+#     loading filtered and zero-filled eBird data
+#=============================================================================================
 
 setwd("/Volumes/commons/CarlingLab/eBird Data/Data for looking at relative abundance")
 
@@ -32,7 +37,10 @@ setwd("/Volumes/commons/CarlingLab/eBird Data/Data for looking at relative abund
 ## locations for only one dataset. Here, I'll do it for the Indigo Bunting data
 ebird <- read.csv("indigo_bunting_pred_mx_half_july.csv", header = TRUE)
 
-###### preparing MODIS landcover data ------------------------------------------
+
+#=============================================================================================
+#     preparing MODIS landcover data
+#=============================================================================================
 ### creating a landcover classification around each point of the eBird dataset
 # load the landcover data
 
@@ -89,7 +97,9 @@ landcover <- names(landcover) %>%
 landcover
 
 
-##### combining MODIS and eBird data ------------------------------------------
+#=============================================================================================
+#     combining MODIS and eBird data
+#=============================================================================================
 
 #converting observation date to date, not a factor
 ebird$observation_date <- as_date(ebird$observation_date)
@@ -174,7 +184,10 @@ ebird_pland <- ebird_pland %>%
 write_csv(ebird_pland, "ebird_pland_location_final,year.csv", na = "") # for Lazuli
 ebird_pland<-read.csv("ebird_pland_location_final,year.csv")
 
-##### making MODIS prediction surface for models ------------------------------
+
+#=============================================================================================
+#     making MODIS prediction surface for models
+#=============================================================================================
 
 agg_factor <- round(2 * neighborhood_radius / res(landcover))
 r <- raster(landcover) %>% 
@@ -291,7 +304,10 @@ write_csv(ebird_pland_elev_checklist, "ebird_pland-elev_location-year_final.csv"
 pland_elev_pred <- inner_join(pland_coords, elev_pred, by = "id")
 write_csv(pland_elev_pred, "pland-elev_prediction-surface_trim_final.csv")
 
-# adding bioclim data to eBird checklists and prediction surface ----------
+
+#=============================================================================================
+#     adding bioclim data to eBird checklists and prediction surface
+#=============================================================================================
 
 # organizing workspace
 dir.create(path = "data")
@@ -428,508 +444,3 @@ head(bioclim_values_pred_all)
 # prediction surface covariates
 pland_elev_bioclim_pred <- inner_join(pland_elev_pred, bioclim_values_pred_all, by = "id")
 write_csv(pland_elev_bioclim_pred, "pland-elev-bioclim_prediction-surface_final.csv")
-
-
-
-
-
-##### Modeling relative abundance ---------------------------------------------
-
-# set random number seed to insure fully repeatable results
-set.seed(1)
-
-# loading eBird data
-ebird <- read_csv("lazuli_bunting_pred.csv") %>% 
-  mutate(protocol_type = factor(protocol_type, 
-                                levels = c("Stationary" , "Traveling"))) %>%
-  # remove observations with no count
-  filter(!is.na(observation_count)) %>%
-  select(!X1)
-
-
-# modis habitat covariates
-habitat <- read_csv("lazuli_pland-elev_location-year.csv") %>% 
-  mutate(year = as.integer(year))
-
-# combine ebird and habitat data
-ebird_habitat <- inner_join(ebird, habitat, by = c("locality_id", "year"))
-
-
-# prediction surface
-pred_surface <- read_csv("pland-elev_prediction-surface.csv")
-# latest year of landcover data
-max_lc_year <- pred_surface$year[1]
-r <- raster("prediction-surface8.tif")
-
-
-### skipping loading GIS data for making maps
-
-## spatiotemporal subsampling
-# generate hexagonal grid with ~ 5 km betweeen cells
-dggs <- dgconstruct(spacing = 5)
-# get hexagonal cell id and week number for each checklist
-checklist_cell <- ebird_habitat %>% 
-  mutate(cell = dgGEO_to_SEQNUM(dggs, longitude, latitude)$seqnum,
-         week = week(observation_date))
-# sample one checklist per grid cell per week
-# sample detection/non-detection independently 
-ebird_ss <- checklist_cell %>% 
-  group_by(species_observed, year, week, cell) %>% 
-  sample_n(size = 1) %>% 
-  ungroup() %>% 
-  select(-cell, -week)
-
-## test train split
-# including all habitat covariates here
-hab_covs <- c("pland_00_water", 
-              "pland_01_evergreen_needleleaf", 
-              "pland_02_evergreen_broadleaf", 
-              "pland_03_deciduous_needleleaf", 
-              "pland_04_deciduous_broadleaf", 
-              "pland_05_mixed_forest",
-              "pland_06_closed_shrubland", 
-              "pland_07_open_shrubland", 
-              "pland_08_woody_savanna", 
-              "pland_09_savanna", 
-              "pland_10_grassland", 
-              "pland_11_wetland", 
-              "pland_12_cropland", 
-              "pland_13_urban", 
-              "pland_14_mosiac", 
-              "pland_15_barren")
-ebird_split <- ebird_ss %>% 
-  # select only the columns to be used in the model
-  select(observation_count,
-         # effort covariates
-         day_of_year, time_observations_started, duration_minutes,
-         effort_distance_km, number_observers, protocol_type,
-         # habitat covariates
-         hab_covs,
-         # also adding latitude, longitude, and elevation
-         latitude, longitude, elevation_median)
-
-# #scaling relevant predictor variables (is it right to do this all at the beginning, or do I need to scale training dataset first and then apply same sd to test dataset?)
-# #ebird_split_scaled <- scale(ebird_split[, !ebird_split$protocol_type])
-# ebird_split_scaled <- ebird_split %>%
-#   mutate_at(c(2:6,8:26), funs(c(scale(.))))
-
-
-# split 80/20
-ebird_split <- ebird_split %>% 
-  split(if_else(runif(nrow(.)) <= 0.8, "train", "test"))
-map_int(ebird_split, nrow)
-
-
-## exploratory data analysis
-p <- par(mfrow = c(1, 2))
-# counts with zeros
-hist(ebird_ss$observation_count, main = "Histogram of counts", 
-     xlab = "Observed count")
-# counts without zeros
-pos_counts <- keep(ebird_ss$observation_count, ~ . > 0)
-hist(pos_counts, main = "Histogram of counts > 0", 
-     xlab = "Observed non-zero count")
-par(p)
-
-
-## abundance models
-# gam parameters
-# degrees of freedom for smoothing
-k <- 5
-# degrees of freedom for cyclic time of day smooth
-k_time <- 7 
-
-# continuous predictors
-# hold out time to treat seperately since it's cyclic
-continuous_covs <- ebird_split$train %>% 
-  select(-observation_count, -protocol_type, -time_observations_started) %>% 
-  names()
-
-# create model formula for predictors
-gam_formula_rhs <- str_glue("s({var}, k = {k})", 
-                            var = continuous_covs, k = k) %>% 
-  str_flatten(collapse = " + ") %>% 
-  str_glue(" ~ ", .,
-           " + protocol_type + ",
-           "s(time_observations_started, bs = \"cc\", k = {k})", 
-           k = k_time) %>% 
-  as.formula()
-
-# model formula including response
-gam_formula <- update.formula(observation_count ~ ., gam_formula_rhs)
-gam_formula
-#> observation_count ~ s(day_of_year, k = 5) + s(duration_minutes, 
-#>     k = 5) + s(effort_distance_km, k = 5) + s(number_observers, 
-#>     k = 5) + s(pland_04_deciduous_broadleaf, k = 5) + s(pland_05_mixed_forest, 
-#>     k = 5) + s(pland_12_cropland, k = 5) + s(pland_13_urban, 
-#>     k = 5) + protocol_type + s(time_observations_started, bs = "cc", 
-#>     k = 7)
-# try fewer knots for longitude?
-
-### try scaling predictors!! actually maybe just scale latitude, longitude, and elevation
-# gam_formula <- observation_count ~ s((scale(day_of_year)), k = 5) + 
-#   s((scale(duration_minutes)), k = 5) + 
-#   s(scale(effort_distance_km), k = 5) + 
-#   s((scale(number_observers)), k = 5) + 
-#   s((scale(pland_01_evergreen_needleleaf)), k = 5) + 
-#   s((scale(pland_04_deciduous_broadleaf)), k = 5) + 
-#   s((scale(pland_06_closed_shrubland)), k = 5) + 
-#   s((scale(pland_07_open_shrubland)), k = 5) + 
-#   s((scale(pland_08_woody_savanna)), k = 5) + 
-#   s((scale(pland_09_savanna)), k = 5) +
-#   s((scale(pland_12_cropland)), k = 5) + 
-#   s((scale(pland_13_urban)), k = 5) +
-#   s((scale(latitude)), k = 5) +
-#   s((scale(longitude)), k = 5) +
-#   s((scale(elevation_median)), k = 5) +
-#   protocol_type + 
-#   s((scale(time_observations_started)), bs = "cc", k = 7)
-
-# specifying gam formula manually, scaling latitude, longitude, and elevation
-gam_formula <- observation_count ~ s(day_of_year, k = 5) + s(duration_minutes, k = 5) + 
-  s(effort_distance_km, k = 5) + s(number_observers, k = 5) + 
-  s(pland_00_water, k = 5) + s(pland_01_evergreen_needleleaf, k = 5) + 
-  s(pland_02_evergreen_broadleaf, k = 5) + s(pland_03_deciduous_needleleaf, k = 5) + 
-  s(pland_04_deciduous_broadleaf, k = 5) + s(pland_05_mixed_forest, k = 5) + 
-  s(pland_06_closed_shrubland, k = 5) + s(pland_07_open_shrubland, k = 5) + 
-  s(pland_08_woody_savanna, k = 5) + s(pland_09_savanna, k = 5) + 
-  s(pland_10_grassland, k = 5) + s(pland_11_wetland, k = 5) + 
-  s(pland_12_cropland, k = 5) + s(pland_13_urban, k = 5) + 
-  s(pland_14_mosiac, k = 5) + s(pland_15_barren, k = 5) + 
-  s((scale(latitude)), k = 5) + s((scale(longitude)), k = 5) + s((scale(elevation_median)), k = 5) + 
-  protocol_type + s(time_observations_started, bs = "cc", k = 7)
-
-# trying to do the model with different error distributions
-# explicitly specify where the knots should occur for time_observations_started
-# this ensures that the cyclic spline joins the variable at midnight
-# this won't happen by default if there are no data near midnight
-time_knots <- list(time_observations_started = seq(0, 24, length.out = k_time))
-
-# zero-inflated poisson
-m_ziplss <- gam(list(gam_formula,      # count model
-                     gam_formula[-2]), # presence model
-                data = ebird_split$train, 
-                family = "ziplss", 
-                knots = time_knots)
-
-# negative binomial
-m_nb <- gam(gam_formula,
-            data = ebird_split$train, 
-            family = "nb",
-            knots = time_knots)
-
-# tweedie distribution
-m_tw <- gam(gam_formula,
-            data = ebird_split$train, 
-            family = "tw",
-            knots = time_knots)
-
-
-### skipping model assesment for now
-
-
-### examining covariate effects
-# ggplot function
-plot_gam <- function(m, title = NULL, ziplss = c("presence", "abundance")) {
-  # capture plot
-  tmp <- tempfile()
-  png(tmp)
-  p <- plot(m, pages = 1)
-  dev.off()
-  unlink(tmp)
-  
-  # drop addition models in ziplss
-  if (m$family$family == "ziplss") {
-    is_presence <- map_lgl(p, ~ str_detect(.$ylab, "^s\\.1"))
-    if (ziplss == "presence") {
-      p <- p[is_presence]  
-    } else {
-      p <- p[!is_presence]
-    }
-  }
-  
-  # extract data
-  p_df <- map_df(p, ~ tibble(cov = rep(.$xlab, length(.$x)),
-                             x = .$x, fit = .$fit, se = .$se))
-  
-  # plot
-  g <- ggplot(p_df) +
-    aes(x = x, y = fit,
-        ymin = fit - se, ymax = fit + se) +
-    geom_ribbon(fill = "grey80") +
-    geom_line(col = "blue") +
-    facet_wrap(~ cov, scales = "free_x") +
-    labs(x = NULL,
-         y = "Smooth function",
-         title = title)
-  print(g)
-  invisible(p_df)
-}
-
-plot_gam(m_nb, title = "Negative Binomial GAM")
-
-
-# defining prediction model
-pred_model <- m_nb
-
-
-### prediction
-# create a dataframe of covariates with a range of start times
-#seq_tod <- seq(0, 24, length.out = 300)
-seq_tod <- seq(-2.737565, 2.887304, length.out = 300)
-tod_df <-ebird_split_scaled$train %>% 
-  # find average pland habitat covariates
-  select(latitude, longitude, elevation_median, (starts_with("pland"))) %>% 
-  summarize_all(mean, na.rm = TRUE) %>% 
-  ungroup() %>% 
-  # use standard checklist
-  mutate(day_of_year = yday(ymd(str_glue("{max_lc_year}-06-15"))),
-         duration_minutes = 60,
-         effort_distance_km = 1,
-         number_observers = 1,
-         protocol_type = "Traveling") %>% 
-  cbind(time_observations_started = seq_tod)
-
-# predict at different start times
-pred_tod <- predict(pred_model, newdata = tod_df, 
-                    type = "link", 
-                    se.fit = TRUE) %>% 
-  as_tibble() %>% 
-  # calculate backtransformed confidence limits
-  transmute(time_observations_started = seq_tod,
-            pred = pred_model$family$linkinv(fit),
-            pred_lcl = pred_model$family$linkinv(fit - 1.96 * se.fit),
-            pred_ucl = pred_model$family$linkinv(fit + 1.96 * se.fit))
-
-# find optimal time of day
-t_peak <- pred_tod$time_observations_started[which.max(pred_tod$pred_lcl)]
-
-# plot the partial dependence plot
-ggplot(pred_tod) +
-  aes(x = time_observations_started, y = pred,
-      ymin = pred_lcl, ymax = pred_ucl) +
-  geom_ribbon(fill = "grey80", alpha = 0.5) +
-  geom_line() +
-  geom_vline(xintercept = t_peak, color = "blue", linetype = "dashed") +
-  labs(x = "Hours since midnight",
-       y = "Predicted relative abundance",
-       title = "Effect of observation start time on Lazuli Bunting reporting",
-       subtitle = "Peak detectability shown as dashed blue line")
-
-
-# add effort covariates to prediction surface
-pred_surface_eff <- pred_surface %>% 
-  mutate(day_of_year = yday(ymd(str_glue("{max_lc_year}-06-15"))),
-         time_observations_started = t_peak,
-         duration_minutes = 60,
-         effort_distance_km = 1,
-         number_observers = 1,
-         protocol_type = "Traveling")
-
-# predict
-pred <- predict(pred_model, newdata = pred_surface_eff, 
-                type = "link", 
-                se.fit = TRUE) %>% 
-  as_tibble() %>% 
-  # calculate confidence limits and back transform
-  transmute(abd = pred_model$family$linkinv(fit),
-            abd_se = pred_model$family$linkinv(se.fit),
-            abd_lcl = pred_model$family$linkinv(fit - 1.96 * se.fit),
-            abd_ucl = pred_model$family$linkinv(fit + 1.96 * se.fit)) %>%
-  # add to prediction surface
-  bind_cols(pred_surface_eff, .) %>% 
-  select(latitude, longitude, abd, abd_se, abd_lcl, abd_ucl)
-
-
-
-### converting object to spatial dataframe
-r_pred <- pred %>% 
-  # convert to spatial features
-  st_as_sf(coords = c("longitude", "latitude"), crs = 4326) %>% 
-  select(abd, abd_se) %>% 
-  st_transform(crs = projection(r)) %>% 
-  # rasterize
-  rasterize(r)
-r_pred <- r_pred[[-1]]
-
-# save the rasters
-# tif_dir <- "output"
-# if (!dir.exists(tif_dir)) {
-#   dir.create(tif_dir)
-# }
-# writeRaster(r_pred[["abd"]], 
-#             filename = file.path(tif_dir, "abundance-model_abd_woothr.tif"),
-#             overwrite = TRUE)
-# writeRaster(r_pred[["abd_se"]], 
-#             filename = file.path(tif_dir, "abundance-model_se_woothr.tif"), 
-#             overwrite = TRUE)
-
-
-
-
-
-#### making the relative abundance map!!!!
-
-# any expected abundances below this threshold are set to zero
-zero_threshold <- 0.05
-
-# project predictions
-map_proj <- st_crs(102003)
-r_pred_proj <- projectRaster(r_pred, crs = map_proj$proj4string, method = "ngb")
-
-
-
-# load gis data for making maps
-map_proj <- st_crs(102003)
-ne_land <- read_sf("~/Downloads/data/gis-data.gpkg", "ne_land") %>% 
-  st_transform(crs = map_proj) %>% 
-  st_geometry()
-
-ne_land_trim2 <- ne_land_trim %>% 
-  st_transform(crs = map_proj) %>% 
-  st_geometry()
-bcr <- read_sf("~/Downloads/data/gis-data.gpkg", "bcr") %>% 
-  st_transform(crs = map_proj) %>% 
-  st_geometry()
-ne_country_lines <- read_sf("~/Downloads/data/gis-data.gpkg", "ne_country_lines") %>% 
-  st_transform(crs = map_proj) %>% 
-  st_geometry()
-ne_state_lines <- read_sf("~/Downloads/data/gis-data.gpkg", "ne_state_lines") %>% 
-  st_transform(crs = map_proj) %>% 
-  st_geometry()
-
-
-
-par(mfrow = c(2, 1))
-for (nm in names(r_pred)) {
-  r_plot <- r_pred_proj[[nm]]
-  
-  par(mar = c(3.5, 0.25, 0.25, 0.25))
-  # set up plot area
-  plot(ne_land_trim2, col = NA, border = NA)
-  plot(ne_land_trim2, col = "#dddddd", border = "#888888", lwd = 0.5, add = TRUE)
-  
-  # modified plasma palette
-  plasma_rev <- rev(plasma(25, end = 0.9))
-  gray_int <- colorRampPalette(c("#dddddd", plasma_rev[1]))
-  pal <- c(gray_int(4)[2], plasma_rev)
-  
-  # abundance vs. se
-  if (nm == "abd") {
-    title <- "Lazuli Bunting Relative Abundance"
-    # set very low values to zero
-    r_plot[r_plot <= zero_threshold] <- NA
-    # log transform
-    r_plot <- log10(r_plot)
-    # breaks and legend
-    mx <- ceiling(100 * cellStats(r_plot, max)) / 100
-    mn <- floor(100 * cellStats(r_plot, min)) / 100
-    brks <- seq(mn, mx, length.out = length(pal) + 1)
-    lbl_brks <- sort(c(-2:2, mn, mx))
-    lbls <- round(10^lbl_brks, 2)
-  } else {
-    title <- "Lazuli Bunting Abundance Uncertainty (SE)"
-    # breaks and legend
-    mx <- ceiling(1000 * cellStats(r_plot, max)) / 1000
-    mn <- floor(1000 * cellStats(r_plot, min)) / 1000
-    brks <- seq(mn, mx, length.out = length(pal) + 1)
-    lbl_brks <- seq(mn, mx, length.out = 5)
-    lbls <- round(lbl_brks, 2)
-  }
-  
-  # abundance
-  plot(r_plot, 
-       col = pal, breaks = brks, 
-       maxpixels = ncell(r_plot),
-       legend = FALSE, add = TRUE)
-  
-  # borders
-  #plot(bcr, border = "#000000", col = NA, lwd = 1, add = TRUE)
-  plot(ne_state_lines, col = "#ffffff", lwd = 0.75, add = TRUE)
-  plot(ne_country_lines, col = "#ffffff", lwd = 1.5, add = TRUE)
-  box()
-  
-  # legend
-  par(new = TRUE, mar = c(0, 0, 0, 0))
-  image.plot(zlim = range(brks), legend.only = TRUE, col = pal,
-             smallplot = c(0.25, 0.75, 0.06, 0.09),
-             horizontal = TRUE,
-             axis.args = list(at = lbl_brks, 
-                              labels = lbls,
-                              fg = "black", col.axis = "black",
-                              cex.axis = 0.75, lwd.ticks = 0.5,
-                              padj = -1.5),
-             legend.args = list(text = title,
-                                side = 3, col = "black",
-                                cex = 1, line = 0))
-}
-
-
-
-
-
-
-
-par(mfrow = c(2, 1))
-for (nm in names(r_pred)) {
-  r_plot <- r_pred_proj[[nm]]
-  
-  par(mar = c(3.5, 0.25, 0.25, 0.25))
-  # set up plot area
-  plot(bcr, col = NA, border = NA)
-  plot(ne_land, col = "#dddddd", border = "#888888", lwd = 0.5, add = TRUE)
-  
-  # modified plasma palette
-  plasma_rev <- rev(plasma(25, end = 0.9))
-  gray_int <- colorRampPalette(c("#dddddd", plasma_rev[1]))
-  pal <- c(gray_int(4)[2], plasma_rev)
-  
-  # abundance vs. se
-  if (nm == "abd") {
-    title <- "Wood Thrush Relative Abundance"
-    # set very low values to zero
-    r_plot[r_plot <= zero_threshold] <- NA
-    # log transform
-    r_plot <- log10(r_plot)
-    # breaks and legend
-    mx <- ceiling(100 * cellStats(r_plot, max)) / 100
-    mn <- floor(100 * cellStats(r_plot, min)) / 100
-    brks <- seq(mn, mx, length.out = length(pal) + 1)
-    lbl_brks <- sort(c(-2:2, mn, mx))
-    lbls <- round(10^lbl_brks, 2)
-  } else {
-    title <- "Wood Thrush Abundance Uncertainty (SE)"
-    # breaks and legend
-    mx <- ceiling(1000 * cellStats(r_plot, max)) / 1000
-    mn <- floor(1000 * cellStats(r_plot, min)) / 1000
-    brks <- seq(mn, mx, length.out = length(pal) + 1)
-    lbl_brks <- seq(mn, mx, length.out = 5)
-    lbls <- round(lbl_brks, 2)
-  }
-  
-  # abundance
-  plot(r_plot, 
-       col = pal, breaks = brks, 
-       maxpixels = ncell(r_plot),
-       legend = FALSE, add = TRUE)
-  
-  # borders
-  plot(bcr, border = "#000000", col = NA, lwd = 1, add = TRUE)
-  plot(ne_state_lines, col = "#ffffff", lwd = 0.75, add = TRUE)
-  plot(ne_country_lines, col = "#ffffff", lwd = 1.5, add = TRUE)
-  box()
-  
-  # legend
-  par(new = TRUE, mar = c(0, 0, 0, 0))
-  image.plot(zlim = range(brks), legend.only = TRUE, col = pal,
-             smallplot = c(0.25, 0.75, 0.06, 0.09),
-             horizontal = TRUE,
-             axis.args = list(at = lbl_brks, 
-                              labels = lbls,
-                              fg = "black", col.axis = "black",
-                              cex.axis = 0.75, lwd.ticks = 0.5,
-                              padj = -1.5),
-             legend.args = list(text = title,
-                                side = 3, col = "black",
-                                cex = 1, line = 0))
-}
