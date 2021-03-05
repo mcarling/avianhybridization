@@ -17,22 +17,6 @@ library(tidyverse)
 # in the United from 2010 to 2018. Because the eBird dataset is so large, I split it up into separate datasets 
 # for each year to avoid exhausting R's vector memory.
 
-# 2010
-ebd_filters_2010_yr <- auk_ebd(f_in_ebd) %>% 
-  auk_country(country = "US") %>% # not sure if this includes US territories
-  auk_date(date = c("2010-01-01", "2010-12-31"))
-
-#applying defined filters to the eBird object
-ebd_2010_yr <- "ebd_filtered_2010_yr.txt"
-ebd_filtered_2010_yr <- auk_filter(ebd_filters_2010_yr, file = ebd_2010_yr, overwrite = TRUE)
-
-# importing eBird data into an R dataframe
-ebd2010yr <- read_ebd(ebd_2010_yr, rollup=FALSE)
-
-
-
-
-
 #reading in the eBird data for each year separately
 ebd2010 <- read_ebd("ebd_filtered2010.txt", rollup=FALSE)
 ebd2011 <- read_ebd("ebd_filtered2011.txt", rollup=FALSE)
@@ -53,7 +37,7 @@ ebd10to18 <- list(ebd2010, ebd2011, ebd2012, ebd2013, ebd2014, ebd2015, ebd2016,
   #decide which ones to include in the analyses
 hybrids <- unique(ebd2016[ebd2016$category=="hybrid",]$common_name)
 hybrid_count <- function(x,y){
-  y <- ebd2016 %>%
+  y <- ebd2018 %>% # can do for other years
     filter(common_name == x)
   (sum((y$observation_count)))
 }
@@ -220,4 +204,3 @@ for(year in ebd10to18)
   
   print(substitute())
 }
-    
