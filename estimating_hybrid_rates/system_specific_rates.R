@@ -1,21 +1,15 @@
-### The purpose of this script is to calculate the total proportion of individual birds 
-### identified as hybrids out of all birds in the eBird dataset in an attempt to replicate 
-### the results of Justyn et al. We will then demonstrate how this approach is inappropriate 
-### by focusing on a few hybridizing species pairs and testing how imposing different geographic 
-### filters influences estimates of hybridization rates.
+### In this script, we use the eBird datasets prepared in the "all_hybridization_rates" script to 
+### calculate hybridization rates for a few specific hybrid systems, rather than the entire eBird 
+### dataset. We demonstrate how imposing different geographic filters can greatly influence estimates 
+### of system-specific hybridization rates.
 
+library(auk)
+library(tidyverse)
 
 # Set-up and preparing the eBird data ------------------------------------------------------------------
 
 setwd('/Volumes/commons/CarlingLab/eBird Data')
 # setwd('/pfs/tsfs1/gscratch/pdoughe1') # if you're running this script on Teton
-
-library(auk)
-library(tidyverse)
-
-# Like Justyn et al., we'll filter the eBird data down to all checklists submitted at any time of the year 
-# in the United from 2010 to 2018. Because the eBird dataset is so large, I split it up into separate datasets 
-# for each year to avoid exhausting R's vector memory.
 
 #reading in the eBird data for each year separately
 ebd2010 <- read_ebd("ebd_filtered2010.txt", rollup=FALSE)
@@ -35,7 +29,7 @@ ebd10to18 <- list(ebd2010, ebd2011, ebd2012, ebd2013, ebd2014, ebd2015, ebd2016,
 #making a dataframe of the frequency of all hybrid combinations that occur in the dataset
   #this step isn't necessary, just tells you the number of each hybrid combination to help you 
   #decide which ones to include in the analyses
-hybrids <- unique(ebd2016[ebd2016$category=="hybrid",]$common_name)
+hybrids <- unique(ebd2018[ebd2018$category=="hybrid",]$common_name)
 hybrid_count <- function(x,y){
   y <- ebd2018 %>% # can do for other years
     filter(common_name == x)
