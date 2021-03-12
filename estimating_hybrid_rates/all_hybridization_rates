@@ -1,0 +1,172 @@
+### In this script, we first filter and load eBird data. We then calculates the total proportion 
+### of individual birds identified as hybrids out of all birds in the eBird dataset in an attempt 
+### to replicate the results of Justyn et al.
+
+library(auk)
+library(tidyverse)
+
+# Set-up and preparing the eBird data ------------------------------------------------------------------
+
+setwd('/Volumes/commons/CarlingLab/eBird Data')
+# setwd('/pfs/tsfs1/gscratch/pdoughe1') # if you're running this script on Teton
+
+# Like Justyn et al., we'll filter the eBird data down to all checklists submitted at any time of the year 
+# in the United States from 2010 to 2018. Because the eBird dataset is so large, I split it up into separate datasets 
+# for each year to avoid exhausting R's vector memory.
+
+#defining a path to folder with eBird file
+ebd_dir <- "/Volumes/commons/CarlingLab/eBird Data/" 
+
+# defining the path to ebd file
+f_in_ebd <- file.path(ebd_dir, "ebd_US_relJan-2020.txt") # we downloaded data for only the US from the eBird dataset
+
+##2010
+#defining the filters
+ebd_filters_2010 <- auk_ebd(f_in_ebd) %>% 
+  auk_date(date = c("2010-01-01", "2010-12-31")) # can also filter down to just the breeding season by substituting "2011-06-01", "2011-07-31" here
+
+#applying defined filters to the eBird object
+ebd_2010 <- "ebd_filtered2010.txt"
+ebd_filtered_2010 <- auk_filter(ebd_filters_2010, file = ebd_2010, overwrite = TRUE)
+
+##2011
+#defining the filters
+ebd_filters_2011 <- auk_ebd(f_in_ebd) %>% 
+  auk_date(date = c("2011-01-01", "2011-12-31"))
+
+#applying defined filters to the eBird object
+ebd_2011 <- "ebd_filtered2011.txt"
+ebd_filtered_2011 <- auk_filter(ebd_filters_2011, file = ebd_2011, overwrite = TRUE)
+
+##2012
+#defining the filters
+ebd_filters_2012 <- auk_ebd(f_in_ebd) %>% 
+  auk_date(date = c("2012-01-01", "2012-12-31"))
+
+#applying defined filters to the eBird object
+ebd_2012 <- "ebd_filtered2012.txt"
+ebd_filtered_2012 <- auk_filter(ebd_filters_2012, file = ebd_2012, overwrite = TRUE)
+
+##2013
+#defining the filters
+ebd_filters_2013 <- auk_ebd(f_in_ebd) %>% 
+  auk_date(date = c("2013-01-01", "2013-12-31"))
+
+#applying defined filters to the eBird object
+ebd_2013 <- "ebd_filtered2013.txt"
+ebd_filtered_2013 <- auk_filter(ebd_filters_2013, file = ebd_2013, overwrite = TRUE)
+
+##2014
+#defining the filters
+ebd_filters_2014 <- auk_ebd(f_in_ebd) %>% 
+  auk_date(date = c("2014-01-01", "2014-12-31"))
+
+#applying defined filters to the eBird object
+ebd_2014 <- "ebd_filtered2014.txt"
+ebd_filtered_2014 <- auk_filter(ebd_filters_2014, file = ebd_2014, overwrite = TRUE)
+
+##2015
+#defining the filters
+ebd_filters_2015 <- auk_ebd(f_in_ebd) %>% 
+  auk_date(date = c("2015-01-01", "2015-12-31"))
+
+#applying defined filters to the eBird object
+ebd_2015 <- "ebd_filtered2015.txt"
+ebd_filtered_2015 <- auk_filter(ebd_filters_2015, file = ebd_2015, overwrite = TRUE)
+
+##2016
+#defining the filters
+ebd_filters_2016 <- auk_ebd(f_in_ebd) %>% 
+  auk_date(date = c("2016-01-01", "2016-12-31"))
+
+#applying defined filters to the eBird object
+ebd_2016 <- "ebd_filtered2016.txt"
+ebd_filtered_2016 <- auk_filter(ebd_filters_2016, file = ebd_2016, overwrite = TRUE)
+
+##2017
+#defining the filters
+ebd_filters_2017 <- auk_ebd(f_in_ebd) %>% 
+  auk_date(date = c("2017-01-01", "2017-12-31"))
+
+#applying defined filters to the eBird object
+ebd_2017 <- "ebd_filtered2017.txt"
+ebd_filtered_2017 <- auk_filter(ebd_filters_2017, file = ebd_2017, overwrite = TRUE)
+
+##2018
+#defining the filters
+ebd_filters_2018 <- auk_ebd(f_in_ebd) %>% 
+  auk_date(date = c("2018-01-01", "2018-12-31"))
+
+#applying defined filters to the eBird object
+ebd_2018 <- "ebd_filtered2018.txt"
+ebd_filtered_2018 <- auk_filter(ebd_filters_2018, file = ebd_2018, overwrite = TRUE)
+
+
+# Calculating dataset-wide hybridization rates ------------------------------------------------------------------
+
+#reading in the eBird data for each year separately
+ebd2010 <- read_ebd("ebd_filtered2010.txt", rollup=FALSE)
+ebd2011 <- read_ebd("ebd_filtered2011.txt", rollup=FALSE)
+ebd2012 <- read_ebd("ebd_filtered2012.txt", rollup=FALSE)
+ebd2013 <- read_ebd("ebd_filtered2013.txt", rollup=FALSE)
+ebd2014 <- read_ebd("ebd_filtered2014.txt", rollup=FALSE)
+ebd2015 <- read_ebd("ebd_filtered2015.txt", rollup=FALSE)
+ebd2016 <- read_ebd("ebd_filtered2016.txt", rollup=FALSE)
+ebd2017 <- read_ebd("ebd_filtered2017.txt", rollup=FALSE)
+ebd2018 <- read_ebd("ebd_filtered2018.txt", rollup=FALSE)
+
+# Combining the eBird data for each year into a list:
+ebd10to18 <- list(ebd2010, ebd2011, ebd2012, ebd2013, ebd2014, ebd2015, ebd2016, ebd2017, ebd2018)
+
+
+####calculating the proportion of hybrids over all birds in the entire dataset
+
+year_hybrid_rates = vector('list', length(ebd10to18))
+
+for(i in ebd10to18){
+
+#preparing dataset
+year <- i %>% 
+    filter(observation_count !="X") # this gets rid of obserations that don't have counts
+year$observation_count = as.numeric(year$observation_count)
+
+#adding a genus column to ebird dataframe
+year$genus <- (sub(" .*", "", year$scientific_name))
+
+#calculating the total number of hybrids over the total number of birds for 2010
+hybrids <- year %>% 
+  filter(category=="hybrid")
+total <- year %>% 
+  filter(category=="hybrid"| category=="species"| category=="issf"| category=="form")
+
+hybrid_rate_all <- (sum(hybrids$observation_count))/(sum(total$observation_count))
+
+
+##filtering down genera that have at least two species
+species <- sort(unique(total$scientific_name))
+genus <- (sub(" .*", "", species))
+genera <- data.frame(genus, species)
+
+monotypic <- names(which(table(genera$genus) == 1))
+
+#filtering to exclude monotypic genera
+year_reduced <- year[!year$genus %in% monotypic,]
+
+#calculating the total number of hybrids over the total number of birds for 2010
+hybrids_monotypic <- year_reduced %>% 
+  filter(category=="hybrid")
+total_monotypic <- year_reduced %>% 
+  filter(category=="hybrid"| category=="species"| category=="issf"| category=="form")
+
+hybrid_rate_monotypic <- (sum(hybrids_monotypic$observation_count))/(sum(total_monotypic$observation_count))
+
+# extracting the year
+year$ebdyear <- (sub("-.*", "", year$observation_date))
+
+year_hybrid_rates[[i]] <- tibble(year = unique(year$ebdyear), hybrid_rate_all, hybrid_rate_monotypic)
+}
+
+year_hybrid_rates_all <- do.call(rbind, year_hybrid_rates)
+
+
+
