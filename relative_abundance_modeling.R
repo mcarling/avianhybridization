@@ -73,11 +73,11 @@ ebird_data <- c("indigo_bunting_pred_mx_half_july.csv",
                 "lazuli_bunting_pred_mx_half_july.csv", 
                 "hybrid_bunting_pred_mx_half_july.csv")
 
-# we'll save the top model for each species
-ebird_gam <- list()
+# we'll save the prediction surface for each species
+ebird_pred <- list()
 
-# we'll also save the training dataset for each species
-ebird_split_train <- list()
+# we'll also save the top model for each species
+ebird_gam <- list()
 
 for(i in ebird_data){
   
@@ -176,7 +176,6 @@ for(i in ebird_data){
     split(if_else(runif(nrow(.)) <= 0.8, "train", "test"))
   map_int(ebird_split, nrow)
   
-  ebird_split_train[[i]] <- ebird_split$train
 
   ### running gams to model abundance for each species
 
@@ -267,7 +266,7 @@ for(i in ebird_data){
 
   ## now evaluating the model based on Spearman's rank correlation
   # spearman’s rank correlation
-  test_pred %>% 
+  test_pred_cor <- test_pred %>% 
     group_by(family, model) %>% 
     summarise(rank_cor = cor.test(obs, pred, 
                                  method = "spearman", 
@@ -275,12 +274,65 @@ for(i in ebird_data){
     ungroup()
 
   # extracting the model with the highest Spearman's rank correlation
-  pred_model <- test_pred_cor[which.max(test_pred_cor$rank_cor),]$model
+  top_model <- test_pred_cor[which.max(test_pred_cor$rank_cor),]$model
+  pred_model <- get(top_model)
+  ebird_gam[[i]] <- pred_model
   
-  ebird_gam[[i]] <- get(pred_model)
+  ### using model output to predict relative abundance across prediction surface
+  seq_tod <- seq(0, 24, length.out = 300)
+  tod_df <- ebird_split$train %>% 
+    # find average pland habitat covariates
+    select(starts_with("pland"), starts_with("bio"), longitude) %>% 
+    summarize_all(mean, na.rm = TRUE) %>% 
+    ungroup() %>% 
+    # use standard checklist
+    mutate(day_of_year = yday(ymd(str_glue("{max_lc_year}-06-15"))),
+           duration_minutes = 60,
+           effort_distance_km = 1,
+           number_observers = 1,
+           protocol_type = "Traveling") %>% 
+    cbind(time_observations_started = seq_tod)
+  
+  # predict at different start times
+  pred_tod <- predict(pred_model, newdata = tod_df, 
+                      type = "link", 
+                      se.fit = TRUE) %>% 
+    as_tibble() %>% 
+    # calculate backtransformed confidence limits
+    transmute(time_observations_started = seq_tod,
+              pred = pred_model$family$linkinv(fit),
+              pred_lcl = pred_model$family$linkinv(fit - 1.96 * se.fit),
+              pred_ucl = pred_model$family$linkinv(fit + 1.96 * se.fit))
+  
+  # find optimal time of day
+  t_peak <- pred_tod$time_observations_started[which.max(pred_tod$pred_lcl)]
+  
+  # add effort covariates to prediction surface
+  pred_surface_eff <- pred_surface %>% 
+    mutate(day_of_year = yday(ymd(str_glue("{max_lc_year}-06-15"))),
+           time_observations_started = t_peak,
+           duration_minutes = 60,
+           effort_distance_km = 1,
+           number_observers = 1,
+           protocol_type = "Traveling")
+  
+  ### predict
+  ebird_pred[[i]] <- predict(pred_model, newdata = pred_surface_eff,                       
+                             type = "link", 
+                             se.fit = TRUE) %>% 
+    as_tibble() %>% 
+    # calculate confidence limits and back transform
+    transmute(abd = pred_model$family$linkinv(fit),
+              abd_se = pred_model$family$linkinv(se.fit),
+              abd_lcl = pred_model$family$linkinv(fit - 1.96 * se.fit),
+              abd_ucl = pred_model$family$linkinv(fit + 1.96 * se.fit)) %>%
+    # add to prediction surface
+    bind_cols(pred_surface_eff, .) %>% 
+    select(longitude, abd, abd_se, abd_lcl, abd_ucl)
 }
 
 ## model validation for the top model for each species
+par(mfrow = c(2, 2), mar = c(5,5,2,2))
 gam.check(ebird_gam[[1]]) # for Indigos
 gam.check(ebird_gam[[2]]) # for Lazulis
 gam.check(ebird_gam[[3]]) # for hybrids
@@ -338,7 +390,10 @@ ebird_gam <- list()
 # we'll also save the training dataset for each species
 ebird_split_train <- list()
 
-for(i in ebird_data){
+# we'll save the predicted model output for each species
+ebird_pred <- list()
+
+for(i in ebird_gam){
  seq_tod <- seq(0, 24, length.out = 300)
  tod_df <- ebird_split$train %>% 
     # find average pland habitat covariates
@@ -377,7 +432,7 @@ for(i in ebird_data){
           protocol_type = "Traveling")
 
   ### predict
-  ebird_pred <- predict(ebird_gam[[i]], newdata = pred_surface_eff,                       
+  ebird_pred[[i]] <- predict(ebird_gam[[i]], newdata = pred_surface_eff,                       
                        type = "link", 
                        se.fit = TRUE) %>% 
   as_tibble() %>% 
@@ -389,15 +444,12 @@ for(i in ebird_data){
   # add to prediction surface
   bind_cols(pred_surface_eff, .) %>% 
   select(latitude, longitude, abd, abd_se, abd_lcl, abd_ucl)
-  
+}  
 
 
-write.csv(indigo_pred, "indigo_pred_nb_final_final.csv", na = "", row.names=FALSE) # for Indigos
-
-
-## for model validation, look at distribution of residuals
-
-## also looking at influential observations
+write.csv(ebird_pred[[1]], "indigo_pred_final_final.csv", na = "", row.names=FALSE) # for Indigos
+write.csv(ebird_pred[[2]], "lazuli_pred_final_final.csv", na = "", row.names=FALSE) # for Lazulis
+write.csv(ebird_pred[[3]], "hybrid_pred_final_final.csv", na = "", row.names=FALSE) # for hybrids
 
 
 
