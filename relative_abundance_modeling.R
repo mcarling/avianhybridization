@@ -331,13 +331,15 @@ for(i in ebird_data){
     select(longitude, abd, abd_se, abd_lcl, abd_ucl)
 }
 
-## model validation for the top model for each species
+
+### model validation for the top model for each species
 par(mfrow = c(2, 2), mar = c(5,5,2,2))
 gam.check(ebird_gam[[1]]) # for Indigos
 gam.check(ebird_gam[[2]]) # for Lazulis
 gam.check(ebird_gam[[3]]) # for hybrids
 
-## examining covariate effects for each species seperately
+
+### examining covariate effects for each species seperately
 # ggplot function
 plot_gam <- function(m, title = NULL, ziplss = c("presence", "abundance")) {
 # capture plot
@@ -380,73 +382,7 @@ plot_gam(ebird_gam[[2]], title = "Lazuli Bunting")
 plot_gam(ebird_gam[[3]], title = "Hybrid Indigo x Lazuli Bunting")
 
 
-## predicting relative abundance across a focal area based on the top model output --------------------------
-
-for(i in ebird_gam)
-
-# we'll save the top model for each species
-ebird_gam <- list()
-
-# we'll also save the training dataset for each species
-ebird_split_train <- list()
-
-# we'll save the predicted model output for each species
-ebird_pred <- list()
-
-for(i in ebird_gam){
- seq_tod <- seq(0, 24, length.out = 300)
- tod_df <- ebird_split$train %>% 
-    # find average pland habitat covariates
-    select(starts_with("pland"), starts_with("bio"), latitude, longitude, elevation_median) %>% 
-    summarize_all(mean, na.rm = TRUE) %>% 
-    ungroup() %>% 
-    # use standard checklist
-    mutate(day_of_year = yday(ymd(str_glue("{max_lc_year}-06-15"))),
-          duration_minutes = 60,
-          effort_distance_km = 1,
-          number_observers = 1,
-          protocol_type = "Traveling") %>% 
-    cbind(time_observations_started = seq_tod)
-
-  # predict at different start times
-  pred_tod <- predict(ebird_gam[[i]], newdata = tod_df, 
-                    type = "link", 
-                    se.fit = TRUE) %>% 
-    as_tibble() %>% 
-    # calculate backtransformed confidence limits
-    transmute(time_observations_started = seq_tod,
-              pred = pred_model$family$linkinv(fit),
-              pred_lcl = pred_model$family$linkinv(fit - 1.96 * se.fit),
-              pred_ucl = pred_model$family$linkinv(fit + 1.96 * se.fit))
-
-  # find optimal time of day
-  t_peak <- pred_tod$time_observations_started[which.max(pred_tod$pred_lcl)]
-
-  # add effort covariates to prediction surface
-  pred_surface_eff <- pred_surface %>% 
-    mutate(day_of_year = yday(ymd(str_glue("{max_lc_year}-06-15"))),
-          time_observations_started = t_peak,
-          duration_minutes = 60,
-          effort_distance_km = 1,
-          number_observers = 1,
-          protocol_type = "Traveling")
-
-  ### predict
-  ebird_pred[[i]] <- predict(ebird_gam[[i]], newdata = pred_surface_eff,                       
-                       type = "link", 
-                       se.fit = TRUE) %>% 
-  as_tibble() %>% 
-  # calculate confidence limits and back transform
-  transmute(abd = ebird_gam[[i]]$family$linkinv(fit),
-            abd_se = ebird_gam[[i]]$family$linkinv(se.fit),
-            abd_lcl = ebird_gam[[i]]$family$linkinv(fit - 1.96 * se.fit),
-            abd_ucl = ebird_gam[[i]]$family$linkinv(fit + 1.96 * se.fit)) %>%
-  # add to prediction surface
-  bind_cols(pred_surface_eff, .) %>% 
-  select(latitude, longitude, abd, abd_se, abd_lcl, abd_ucl)
-}  
-
-
+### saving predicted abundance values for each species
 write.csv(ebird_pred[[1]], "indigo_pred_final_final.csv", na = "", row.names=FALSE) # for Indigos
 write.csv(ebird_pred[[2]], "lazuli_pred_final_final.csv", na = "", row.names=FALSE) # for Lazulis
 write.csv(ebird_pred[[3]], "hybrid_pred_final_final.csv", na = "", row.names=FALSE) # for hybrids
