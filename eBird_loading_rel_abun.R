@@ -265,6 +265,13 @@ write.csv(hybrid_bunting_pred, "hybrid_bunting_pred_mx_half_july.csv", na = "", 
 ## in addition to preparing the eBird data, we also need to download 
 ## shapefiles necessary for making maps
 
+# file to save shapefiles
+gpkg_dir <- "spatial_data"
+if (!dir.exists(gpkg_dir)) {
+  dir.create(gpkg_dir)
+}
+f_ne <- file.path(gpkg_dir, "gis_data.gpkg")
+
 # downloading shapefile of North America
 ne_land <- ne_download(scale = 50, category = "cultural",
                        type = "admin_0_countries_lakes",
