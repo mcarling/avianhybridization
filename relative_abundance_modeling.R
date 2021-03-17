@@ -329,7 +329,7 @@ for(i in ebird_data){
               abd_ucl = pred_model$family$linkinv(fit + 1.96 * se.fit)) %>%
     # add to prediction surface
     bind_cols(pred_surface_eff, .) %>% 
-    select(latitude, longitude, abd, abd_se, abd_lcl, abd_ucl)
+    select(latitude, longitude, elevation_median, abd, abd_se, abd_lcl, abd_ucl) # adding elevation so we can plot it later
 }
 
 
