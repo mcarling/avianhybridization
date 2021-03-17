@@ -19,7 +19,6 @@ library(raster)
 library(sf)
 library(viridis)
 library(fields)
-library(dggridR)
 library(tidyverse)
 
 setwd("/Volumes/commons/CarlingLab/eBird Data/Data for looking at relative abundance")
@@ -99,7 +98,7 @@ ne_rivers <- st_crop(ne_rivers, c(ymin=-930000, ymax=1500000, xmin=-2500000, xma
 ne_lakes <- st_crop(ne_lakes, c(ymin=-930000, ymax=1500000, xmin=-2500000, xmax=2150000))
 
 ## preparing elevation data
-r_plot_elev <- indigo_r_pred_proj[[3]]
+r_plot_elev <- indigo_r_pred_proj[["elevation_median"]]
 
 # defining color palette and breaks for shading elevation on maps
 pal_elev <- colorRampPalette(c("#dddddd", "black"))
@@ -119,10 +118,10 @@ zero_threshold_parentals <- 0.05
 zero_threshold_hybrids <- 0.00075 # hybrids are typically much rarer, 
   # need a lower threshold for any predictions to show up on the map
 
-r_plot_indigo <- indigo_r_pred_proj[[1]]
+r_plot_indigo <- indigo_r_pred_proj[["abd"]]
 
 par(mar = c(3.5, 0.25, 0.25, 0.25))
-# set up plot area
+# plotting base map
 plot(ne_land, col = NA, border = NA)
 plot(ne_land, col = "#dddddd", border = "#888888", lwd = 0.5, add = TRUE)
 
@@ -179,10 +178,10 @@ image.plot(zlim = range(brks), legend.only = TRUE, col = pal,
 
 
 ### plotting relative abundance for Lazuli Bunting
-r_plot_lazuli <- lazuli_r_pred_proj[[1]]
+r_plot_lazuli <- lazuli_r_pred_proj[["abd"]]
 
 par(mar = c(3.5, 0.25, 0.25, 0.25))
-# set up plot area
+# plotting base map
 plot(ne_land, col = NA, border = NA)
 plot(ne_land, col = "#dddddd", border = "#888888", lwd = 0.5, add = TRUE)
 
@@ -238,10 +237,10 @@ image.plot(zlim = range(brks), legend.only = TRUE, col = pal,
 
 
 ### plotting relative abundance for hybrid buntings
-r_plot_hybrid <- hybrid_r_pred_proj[[1]]
+r_plot_hybrid <- hybrid_r_pred_proj[["abd"]]
 
 par(mar = c(3.5, 0.25, 0.25, 0.25))
-# set up plot area
+# plotting base map
 plot(ne_land, col = NA, border = NA)
 plot(ne_land, col = "#dddddd", border = "#888888", lwd = 0.5, add = TRUE)
 
