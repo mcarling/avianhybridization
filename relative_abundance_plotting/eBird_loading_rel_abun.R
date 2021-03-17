@@ -9,6 +9,14 @@
 ### At the end of the script, we also download shapefiles for North America 
 ### and for bodies of water, which we'll later use for plotting.
 
+### As with the other scripts in this folder, much of this code has been taken from 
+### the "Best Practices for Using eBird Data" guide by Strimas-Mackey et al. (2020):
+
+### Strimas-Mackey, M., W.M. Hochachka, V. Ruiz-Gutierrez, O.J. Robinson, E.T. Miller,
+### T. Auer, S. Kelling, D. Fink, A. Johnston. 2020. Best Practices for Using eBird 
+### Data. Version 1.0. https://cornelllabofornithology.github.io/ebird-best-practices/. 
+### Cornell Lab of Ornithology, Ithaca, New York. https://doi.org/10.5281/zenodo.3620739
+
 #packages for preparing eBird data
 library(tidyverse)
 library(auk)
