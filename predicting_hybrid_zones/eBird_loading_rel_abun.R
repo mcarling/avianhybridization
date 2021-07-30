@@ -287,7 +287,7 @@ ne_land <- ne_download(scale = 50, category = "cultural",
   filter(CONTINENT == "North America") %>%
   st_set_precision(1e6) %>%
   st_union()
-write_sf(ne_land, "ne_land")
+write_sf(ne_land, f_ne, "ne_land")
 
 # also downloading shapefiles for rivers and lakes, which we'll add to our maps for reference
 ne_rivers <- ne_download(scale = 50, type = 'rivers_lake_centerlines', 
@@ -295,7 +295,7 @@ ne_rivers <- ne_download(scale = 50, type = 'rivers_lake_centerlines',
                          returnclass = "sf") %>%
   st_set_precision(1e6) %>%
   st_union()
-write_sf(ne_rivers, "ne_rivers")
+write_sf(ne_rivers, f_ne, "ne_rivers")
 
 ne_lakes <- ne_download(scale = 50, type = 'lakes', 
                         category = 'physical',
@@ -303,5 +303,5 @@ ne_lakes <- ne_download(scale = 50, type = 'lakes',
   filter(adm0_a3 %in% c("USA", "CAN", "MEX")) %>%
   st_set_precision(1e6) %>%
   st_union()
-write_sf(ne_lakes, "ne_lakes")
+write_sf(ne_lakes, f_ne, "ne_lakes")
 
